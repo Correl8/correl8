@@ -127,9 +127,14 @@ var correl8 = function(doctype, basename) {
       }
     }
     object.timestamp = ts;
+    var monthIndex = self._index + '-' + ts.getFullYear() + '-' + (ts.getMonth() + 1);
     return client.indices.exists({index: self._index}).then(function() {
       console.log('Index exists!');
-      return client.index({index: self._index, type: self._type, body: object});
+      return client.index({
+        index: self._index,
+        type: self._type,
+        body: {doc: object, doc_as_upsert: true}
+      });
     }).then(function() {
       console.log('Indexed document!');
       return client.indices.create({index: monthIndex});
@@ -143,7 +148,11 @@ var correl8 = function(doctype, basename) {
     }).then(function() {
       console.log('Created monthIndex mapping!');
     }).then(function() {
-      return client.index({index: monthIndex, type: self._type, body: object});
+      return client.index({
+        index: monthIndex,
+        type: self._type,
+        body: {doc: object, doc_as_upsert: true}
+      });
     }).then(function() {
       console.log('Indexed document into month index!');
     }).catch(function(error) {
