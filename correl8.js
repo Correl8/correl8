@@ -7,8 +7,8 @@ var client = new elasticsearch.Client({
 var correl8 = function(doctype, basename) {
   this.INDEX_BASE = basename || 'correl8';
   this._type = doctype;
-  this._index = this.INDEX_BASE + '-' + this._type;
-  this.configIndex = INDEX_BASE + '-config';
+  this._index = (this.INDEX_BASE + '-' + this._type).toLowerCase();
+  this.configIndex = INDEX_BASE.toLowerCase() + '-config';
   this.configType = 'config-' + this._type;
 
   // set range for numeric timestamp guessing
@@ -28,7 +28,7 @@ var correl8 = function(doctype, basename) {
 
   this.index = function(newName) {
     if (newName) {
-      self._index = self.INDEX_BASE + '-' + newName;
+      self._index = self.INDEX_BASE + '-' + newName.toLowerCase();
     }
     return self;
   }
