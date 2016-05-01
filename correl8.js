@@ -136,26 +136,6 @@ var correl8 = function(doctype, basename) {
         type: self._type,
         body: {doc: object, doc_as_upsert: true}
       });
-    }).then(function() {
-      // console.log('Indexed document!');
-      return client.indices.create({index: monthIndex});
-    }).then(function() {
-      console.log('Created monthIndex!');
-      return client.indices.getMapping({index: self._index})
-    }).then(function(mapping) {
-      console.log('Fetched index mapping!');
-      mapping.index = monthIndex;
-      return client.indices.putMapping(mapping);
-    }).then(function() {
-      console.log('Created monthIndex mapping!');
-    }).then(function() {
-      return client.index({
-        index: monthIndex,
-        type: self._type,
-        body: {doc: object, doc_as_upsert: true}
-      });
-    }).then(function() {
-      console.log('Indexed document into month index!');
     });
   };
 
