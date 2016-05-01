@@ -1,7 +1,8 @@
 var elasticsearch = require('elasticsearch');
 var client = new elasticsearch.Client({
+  log: 'info',
   host: 'localhost:9200',
-  log: 'info'
+  apiVersion: 'master'
 });
 
 var correl8 = function(doctype, basename) {
@@ -129,21 +130,21 @@ var correl8 = function(doctype, basename) {
     object.timestamp = ts;
     var monthIndex = self._index + '-' + ts.getFullYear() + '-' + (ts.getMonth() + 1);
     return client.indices.exists({index: self._index}).then(function() {
-      console.log('Index exists!');
+      // console.log('Index exists!');
       return client.index({
         index: self._index,
         type: self._type,
         body: {doc: object, doc_as_upsert: true}
       });
     }).then(function() {
-      console.log('Indexed document!');
+      // console.log('Indexed document!');
       return client.indices.create({index: monthIndex});
     }).then(function() {
       console.log('Created monthIndex!');
       return client.indices.getMapping({index: self._index})
     }).then(function(mapping) {
       console.log('Fetched index mapping!');
-      mapping.index = self._index;
+      mapping.index = monthIndex;
       return client.indices.putMapping(mapping);
     }).then(function() {
       console.log('Created monthIndex mapping!');
@@ -155,8 +156,6 @@ var correl8 = function(doctype, basename) {
       });
     }).then(function() {
       console.log('Indexed document into month index!');
-    }).catch(function(error) {
-      console.trace(error);
     });
   };
 
@@ -170,7 +169,7 @@ var correl8 = function(doctype, basename) {
 
   this.release = function() {
     // the process will hang for some time unless the Elasticsearch connection is closed
-    client.close();
+    return client.close();
   }
 
   return this;
