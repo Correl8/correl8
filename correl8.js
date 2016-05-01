@@ -163,6 +163,29 @@ var correl8 = function(doctype, basename) {
     return client.bulk({index: self._index, type: self._type, body: bulk});
   };
 
+  this.deleteOne = function(id) {
+    return client.delete({index: self._index, type: self._type, id: id});
+  };
+
+  this.deleteMany = function(params) {
+    return this.search(params).then(function(results) {
+      // console.log(results);
+      var bulk = [];
+      for (var i=0; i<results.lenght; i++) {
+        var id = results[i]._id;
+        bulk.push({delete: {index: this._index, type: this._type, id: id}});
+      }
+      // console.log(bulk);
+      this.bulk(bulk);
+    })
+  };
+
+  this.remove = function() {
+    return client.indices.delete({index: this._index}).then(function(result) {
+      return client.indices.delete({index: this.configIndex});
+    });
+  }
+
   this.search = function(params) {
     return client.search({index: self._index, type: self._type, body: params});
   }
