@@ -1,9 +1,23 @@
 var elasticsearch = require('elasticsearch');
+var username = 'elastic';
+var password = 'changeme'
+var host = 'localhost';
+var protocol = 'http';
+var port = 9200;
 var client = new elasticsearch.Client({
   log: 'info',
-  host: 'localhost:9200',
+  host: [{
+    protocol: protocol,
+    host: host,
+    port: port,
+    auth: username + ':' + password
+  }],
   apiVersion: 'master'
 });
+
+// set range for numeric timestamp guessing
+var SECONDS_PAST = 60 * 60 * 24 * 365 * 10; // about 10 years in the past
+var SECONDS_FUTURE = 60 * 60 * 24; // 24 hours in the future
 
 var correl8 = function(doctype, basename) {
   this.INDEX_BASE = basename || 'correl8';
@@ -12,19 +26,20 @@ var correl8 = function(doctype, basename) {
   this.configIndex = INDEX_BASE.toLowerCase() + '-config';
   this.configType = 'config-' + this._type;
 
-  // set range for numeric timestamp guessing
-  this.SECONDS_PAST = 60 * 60 * 24 * 365 * 10; // about 10 years in the past
-  this.SECONDS_FUTURE = 60 * 60 * 24; // 24 hours in the future
   var self = this;
 
   // config index created automatically if it doesn't exist already
-  // this should be blocking code!
+  // should be blocking
   client.indices.exists({index: configIndex}).then(function(res) {
     if (!res) {
       client.indices.create({index: configIndex}).then(function() {
-        console.log('Created config index');
+        // console.log('Created config index');
+      }).catch(function() {
+        console.warn('Could not created config index!');
       });
     }
+  }).catch(function(error) {
+    console.trace(error);
   });
 
   this.index = function(newName) {
@@ -52,9 +67,9 @@ var correl8 = function(doctype, basename) {
     searchParams.q = 'id:' + self.configType;
     searchParams.body = {size: 1};
     if (object) {
-      return client.search(params).then(function(response) {
-        // console.log(response.hits.hits[0]._source);
-        if (response && response.hits && response.hits.hits && response.hits.hits[0] && response.hits.hits[0]._source && response.hits.hits[0]._source.id) {
+      return client.search(searchParams).then(function(response) {
+        var obj = this.trimResults(response);
+        if (obj && obj.id) {
           params.id = self.configType;
           params.body = {doc: object};
           return client.update(params);
@@ -66,9 +81,7 @@ var correl8 = function(doctype, basename) {
         }
       });
     }
-    params.q = 'id:' + self.configType;
-    params.body = {size: 1};
-    return client.search(params);
+    return client.search(searchParams);
   }
 
   this.init = function(object) {
@@ -83,8 +96,14 @@ var correl8 = function(doctype, basename) {
         index: self._index,
         type: self._type,
         body: {properties: properties}
+      }).then(function() {
+        // console.log(self._index + " initialized");
       });
     });
+  };
+
+  this.isInitialized = function() {
+    return client.indices.exists({index: self._index});
   };
 
   this.clear = function() {
@@ -109,26 +128,42 @@ var correl8 = function(doctype, basename) {
     });
   };
 
+  this.guessTime = function(obj) {
+    var ts;
+    if (!obj) {
+      return;
+    }
+    // timestamp is a string that can be parsed by Date.parse
+    if (!isNaN(Date.parse(obj))) {
+      ts = new Date(obj);
+    }
+    // timestamp is milliseconds within valid range
+    else if ((obj >= (ts.getTime() - SECONDS_PAST * 1000)) &&
+             (obj <= (ts.getTime() - SECONDS_FUTURE * 1000))) {
+      ts.setTime(obj);
+    }
+    // timestamp is seconds within valid range
+    else if ((obj >= (ts.getTime() / 1000 - SECONDS_PAST)) &&
+             (obj <= (ts.getTime() / 1000 - SECONDS_FUTURE))) {
+      ts.setTime(obj * 1000);
+    }
+    return ts;
+  }
+
   this.insert = function(object) {
     var ts = new Date();
+    var guessed;
     if (object && object.timestamp) {
-      // timestamp is a string that can be parsed by Date.parse
-      if (!isNaN(Date.parse(object.timestamp))) {
-        ts = new Date(object.timestamp);
+      if (guessed = guessTime(object.timestamp)) {
+        ts = guessed;
       }
-      // timestamp is milliseconds within valid range
-      else if ((object.timestamp >= (ts.getTime() - SECONDS_PAST * 1000)) &&
-               (object.timestamp <= (ts.getTime() - SECONDS_FUTURE * 1000))) {
-        ts.setTime(object.timestamp);
-      }
-      // timestamp is seconds within valid range
-      else if ((object.timestamp >= (ts.getTime() / 1000 - SECONDS_PAST)) &&
-               (object.timestamp <= (ts.getTime() / 1000 - SECONDS_FUTURE))) {
-        ts.setTime(object.timestamp * 1000);
+      else {
+        var msg = 'Could not parse timestamp ' + object.timestamp + '!' +
+          ' Overriding with ' + ts + '.';
+        console.warn(msg);
       }
     }
     object.timestamp = ts;
-    var monthIndex = self._index + '-' + ts.getFullYear() + '-' + (ts.getMonth() + 1);
     return client.indices.exists({index: self._index}).then(function() {
       // console.log('Index exists!');
       return client.index({
@@ -170,9 +205,25 @@ var correl8 = function(doctype, basename) {
     return client.search({index: self._index, type: self._type, body: params});
   }
 
+  this.msearch = function(params) {
+    var searchParams = [];
+    for (var i=0; i<params.length; i++) {
+      searchParams[2*i] = {index: self._index, type: self._type};
+      searchParams[2*i+1] = params[i];
+    }
+    return client.msearch({index: self._index, type: self._type, body: searchParams});
+  }
+
   this.release = function() {
     // the process will hang for some time unless the Elasticsearch connection is closed
     return client.close();
+  }
+
+  this.trimResults = function(r) {
+    if (r && r.hits && r.hits.hits && r.hits.hits[0] && r.hits.hits[0]._source) {
+      return r.hits.hits[0]._source;
+    }
+    return false;
   }
 
   return this;
