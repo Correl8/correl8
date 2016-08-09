@@ -166,11 +166,15 @@ var correl8 = function(doctype, basename) {
     object.timestamp = ts;
     return client.indices.exists({index: self._index}).then(function() {
       // console.log('Index exists!');
-      return client.index({
+      var params = {
         index: self._index,
         type: self._type,
-        body: {doc: object, doc_as_upsert: true}
-      });
+        body: object
+      };
+      if (object.id) {
+        params.id = object.id;
+      }
+      return client.index(params);
     });
   };
 
