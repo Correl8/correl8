@@ -60,8 +60,7 @@ var correl8 = function(doctype, basename) {
   this.config = function(object) {
     var params = {
       index: self.configIndex,
-      type: self.configType,
-      id: self.configType
+      type: self.configType
     };
     var searchParams = params;
     searchParams.q = 'id:' + self.configType;
@@ -111,19 +110,23 @@ var correl8 = function(doctype, basename) {
       // console.log('Fetched index map');
       return client.indices.delete({index: self._index}).then(function() {
         // console.log('Deleted index');
-        return client.indices.create({index: self._index});
-      }).then(function() {
-        var mappings = map[self._index].mappings;
-        if (mappings && mappings[self._type] && mappings[self._type].properties) {
-          return client.indices.putMapping({
-            index: self._index,
-            type: self._type,
-            body: {properties: mappings[self._type].properties}
-          });
-        }
-        else {
-          console.warn('No existing mapping, set mapping with init');
-        }
+        return client.index({
+          index: self._index,
+          type: self._type,
+          body: {}
+        }).then(function() {
+          var mappings = map[self._index].mappings;
+          if (mappings && mappings[self._type] && mappings[self._type].properties) {
+            return client.indices.putMapping({
+              index: self._index,
+              type: self._type,
+              body: {properties: mappings[self._type].properties}
+            });
+          }
+          else {
+            console.warn('No existing mapping, set mapping with init');
+          }
+        });
       });
     });
   };

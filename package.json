@@ -1,6 +1,6 @@
 {
   "name": "correl8",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Correl8 Node Library",
   "main": "correl8.js",
   "dependencies": {
