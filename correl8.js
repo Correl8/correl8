@@ -63,7 +63,7 @@ var correl8 = function(doctype, basename) {
       type: self.configType,
       id: self.configType
     };
-    var searchParams = params;
+    var searchParams = Object.assign({}, params);
     searchParams.q = 'id:' + self.configType;
     searchParams.body = {size: 1};
     if (object) {
@@ -92,7 +92,7 @@ var correl8 = function(doctype, basename) {
       type: self._type,
       body: {}
     }).then(function() {
-      client.indices.putMapping({
+      return client.indices.putMapping({
         index: self._index,
         type: self._type,
         body: {properties: properties}
