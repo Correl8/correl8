@@ -69,12 +69,12 @@ var correl8 = function(doctype, basename) {
       return client.search(searchParams).then(function(response) {
         var obj = this.trimResults(response);
         if (obj && obj._id) {
-          params._id = obj._id;
+          params.id = obj._id;
           params.body = {doc: object};
           return client.update(params);
         }
         else {
-          params._id = self.configType;
+          params.id = self.configType;
           params.body = object;
           return client.index(params);
         }
