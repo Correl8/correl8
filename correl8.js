@@ -63,18 +63,18 @@ var correl8 = function(doctype, basename) {
       type: self.configType
     };
     var searchParams = Object.assign({}, params);
-    searchParams.q = 'id:' + self.configType;
+    searchParams.q = '_id:' + self.configType;
     searchParams.body = {size: 1};
     if (object) {
       return client.search(searchParams).then(function(response) {
         var obj = this.trimResults(response);
-        if (obj && obj.id) {
-          params.id = self.configType;
+        if (obj && obj._id) {
+          params._id = obj._id;
           params.body = {doc: object};
           return client.update(params);
         }
         else {
-          object.id = self.configType;
+          object._id = self.configType;
           params.body = object;
           return client.index(params);
         }
