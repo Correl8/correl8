@@ -74,7 +74,7 @@ var correl8 = function(doctype, basename) {
           return client.update(params);
         }
         else {
-          object._id = self.configType;
+          params._id = self.configType;
           params.body = object;
           return client.index(params);
         }
