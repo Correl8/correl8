@@ -117,6 +117,9 @@ var correl8 = function(doctype, basename) {
         }).then(function() {
           var mappings = map[self._index].mappings;
           if (mappings && mappings[self._type] && mappings[self._type].properties) {
+            if (mappings[self._type].properties.fielddata) {
+              delete(mappings[self._type].properties.fielddata);
+            }
             return client.indices.putMapping({
               index: self._index,
               type: self._type,
