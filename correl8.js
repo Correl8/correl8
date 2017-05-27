@@ -30,12 +30,16 @@ var correl8 = function(doctype, basename) {
 
   // config index created automatically if it doesn't exist already
   // should be blocking
-  client.indices.exists({index: configIndex}).then(function(res) {
+  client.indices.exists({index: this.configIndex}).then(function(res) {
     if (!res) {
-      client.indices.create({index: configIndex}).then(function() {
+      return client.index({
+        index: self.configIndex,
+        type: self.configType,
+        body: {}
+      }).then(function() {
         // console.log('Created config index');
-      }).catch(function() {
-        console.warn('Could not created config index!');
+      }).catch(function(error) {
+        console.warn('Could not create config index! ' + error);
       });
     }
   }).catch(function(error) {
