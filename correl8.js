@@ -16,25 +16,22 @@ var client = new elasticsearch.Client({
 });
 
 // set range for numeric timestamp guessing
-var SECONDS_PAST = 60 * 60 * 24 * 365 * 10; // about 10 years in the past
+var SECONDS_PAST = 60 * 60 * 24 * 365.25 * 10; // about 10 years in the past
 var SECONDS_FUTURE = 60 * 60 * 24; // 24 hours in the future
 
 var correl8 = function(doctype, basename) {
-  this.INDEX_BASE = basename || 'correl8';
+  this.INDEX_BASE = basename || 'correl8-' + username;
   this._type = doctype;
   this._index = (this.INDEX_BASE + '-' + this._type).toLowerCase();
   this.configIndex = INDEX_BASE.toLowerCase() + '-config';
-  this.configType = 'config-' + this._type;
-
   var self = this;
 
   // config index created automatically if it doesn't exist already
   // should be blocking
-  client.indices.exists({index: this.configIndex}).then(function(res) {
+  client.indices.exists({index: self.configIndex}).then(function(res) {
     if (!res) {
       return client.index({
         index: self.configIndex,
-        type: self.configType,
         body: {}
       }).then(function() {
         // console.log('Created config index');
@@ -56,15 +53,14 @@ var correl8 = function(doctype, basename) {
   this.type = function(newName) {
     if (newName) {
       self._type = newName;
-      self._index = self.INDEX_BASE + '-' + newName;
+      self._index = self.INDEX_BASE + '-' + newName.toLowerCase();
     }
     return self;
   }
 
   this.config = function(object) {
     var params = {
-      index: self.configIndex,
-      type: self.configType
+      index: self.configIndex
     };
     var searchParams = Object.assign({}, params);
     searchParams.q = '_id:' + self.configType;
