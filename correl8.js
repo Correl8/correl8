@@ -251,6 +251,7 @@ function createMapping(object) {
       // doc_values: store values to disk (reduce heap size)
       properties[prop] = {type: object[prop], doc_values: true};
       // use propietary "text" type for analyzed strings
+/*
       if (object[prop] === 'text') {
         properties[prop].type = 'string';
         // doc_values do not currently work with analyzed string fields
@@ -259,6 +260,13 @@ function createMapping(object) {
       // other strings are not analyzed
       else if (object[prop] === 'string') {
         properties[prop].index = 'not_analyzed';
+      }
+*/
+      if (object[prop] === 'text') {
+        properties[prop].fielddata = 'true';
+      }
+      else if (object[prop] === 'string') {
+        properties[prop].type = 'keyword';
       }
     }
   }
