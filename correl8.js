@@ -62,7 +62,8 @@ var correl8 = function(doctype, basename) {
 
   this.config = function(object) {
     var params = {
-      index: self.configIndex
+      index: self.configIndex,
+      type: self.configType
     };
     var searchParams = Object.assign({}, params);
     searchParams.q = '_id:' + self.configType;
