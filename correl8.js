@@ -24,6 +24,7 @@ var correl8 = function(doctype, basename) {
   this._type = doctype;
   this._index = (this.INDEX_BASE + '-' + this._type).toLowerCase();
   this.configIndex = INDEX_BASE.toLowerCase() + '-config';
+  this.configType = this.configIndex; // still required for 6.0 alpha
   var self = this;
 
   // config index created automatically if it doesn't exist already
@@ -32,6 +33,7 @@ var correl8 = function(doctype, basename) {
     if (!res) {
       return client.index({
         index: self.configIndex,
+        type: self.configType,
         body: {}
       }).then(function() {
         // console.log('Created config index');
