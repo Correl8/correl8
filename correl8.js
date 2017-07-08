@@ -187,8 +187,13 @@ var correl8 = function(doctype, basename) {
     });
   };
 
-  this.bulk = function(bulk) {
-    return client.bulk({index: self._index, type: self._type, body: bulk});
+  this.bulk = function(bulk, timeout) {
+    var params = {index: self._index, type: self._type, body: bulk};
+    if (timeout) {
+      params.timeout = timeout;
+      console.log('Setting bulk timeout to ' + timeout + ' ms');
+    }
+    return client.bulk(params);
   };
 
   this.deleteOne = function(id) {
