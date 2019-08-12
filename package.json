@@ -4,7 +4,7 @@
   "description": "Correl8 Node Library",
   "main": "correl8.js",
   "dependencies": {
-    "@elastic/elasticsearch": "^7.1.0"
+    "@elastic/elasticsearch": "^7.3.0"
   },
   "devDependencies": {},
   "scripts": {
