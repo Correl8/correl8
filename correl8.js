@@ -1,4 +1,9 @@
 const { Client } = require('@elastic/elasticsearch')
+const dayjs = require('dayjs')
+const advancedFormat = require('dayjs/plugin/advancedFormat')
+const dayOfYear = require('dayjs/plugin/dayOfYear')
+const weekOfYear = require('dayjs/plugin/weekOfYear')
+dayjs.extend(dayOfYear)
 
 // set range for numeric timestamp guessing
 const SECONDS_PAST = 60 * 60 * 24 * 365.25 * 25; // about 25 years in the past
@@ -53,6 +58,7 @@ const correl8 = function(doctype, basename, clientOpts) {
       // console.log('Created config index');
     }).catch((error) => {
       console.error('Could not create config index! ');
+      console.log(JSON.stringify(error, null, 1));
       console.trace(new Error(error));
     });
   });
@@ -72,31 +78,42 @@ const correl8 = function(doctype, basename, clientOpts) {
     return self;
   };
 
-  this.config = (object) => {
+  this.config = async (object) => {
     let params = {
       index: self.configIndex,
       // type: self.configType
     };
     let searchParams = Object.assign({}, params); // create copy
     searchParams.q = '_id:' + self.configId;
-    searchParams.body = {size: 1};
+    searchParams.size = 1;
     if (object) {
-      return client.search(searchParams).then((response) => {
-        var obj = self.trimResults(response);
-        if (obj && obj._id) {
-          params.id = obj._id;
+      const response = await client.search(searchParams);
+      const obj = self.trimResults(response);
+      if (obj) {
+        try {
+          params.id = self.configId;
           params.body = {doc: object};
-          return client.update(params);
+          await client.update(params);
         }
-        else {
+        catch(error) {
+          console.error('Failed to update configuration!');
+          console.trace();
+          console.log(JSON.stringify(object, null, 1));
+          throw new Error(error);
+        }
+      }
+      else {
+        try {
           params.id = self.configId;
           params.body = object;
-          return client.index(params);
+          await client.index(params);
         }
-      }).catch((error) => {
-        console.error('Found invalida configuration! ');
-        console.trace(new Error(error));
-      });
+        catch(error) {
+          console.error('Failed to create configuration!');
+          throw new Error(error);
+          console.trace();
+        }
+      }
     }
     return client.search(searchParams);
   };
@@ -127,7 +144,10 @@ const correl8 = function(doctype, basename, clientOpts) {
         // console.log(self._index + " initialized");
       });
     }).catch((error) => {
-      console.error('Could not initialize ' + self._index);
+      let errorMsg = 'Could not initialize ' + self._index + '\n' +
+                     'Tried to index ' + JSON.stringify(properties, null, 1) + '\n' +
+                     'Got error: ' + JSON.stringify(error, null, 1);
+      console.error(errorMsg);
       console.trace(new Error(error));
     });;
   };
@@ -230,7 +250,7 @@ const correl8 = function(doctype, basename, clientOpts) {
       if (object.id) {
         params.id = object.id;
       }
-      console.log('INSERTING: ' + JSON.stringify(params, null, 1));
+      // console.log('INSERTING: ' + JSON.stringify(params, null, 1));
       return client.index(params);
     }).catch((error) => {
       console.error('Initialize first! Unknown index ' + self._index);
@@ -266,6 +286,21 @@ const correl8 = function(doctype, basename, clientOpts) {
       console.warn('Could not search ' + self._index);
       console.trace(new Error(error));
     });
+  };
+
+  this.deleteByQuery = async (q) => {
+    const opts = {
+      index: this._index,
+      q: q
+    };
+    try {
+      return await client.deleteByQuery(opts);
+    }
+    catch(error) {
+      console.warn('Could not delete by query from ' + self._index);
+      console.log(opts);
+      console.trace(new Error(error));
+    }
   };
 
   this.remove = () => {
@@ -308,8 +343,10 @@ const correl8 = function(doctype, basename, clientOpts) {
   };
 
   this.trimResults = (r) => {
-    if (r && r.body && r.body.hits && r.body.hits.hits && r.body.hits.hits[0] && r.body.hits.hits[0]._source) {
-      return r.body.hits.hits[0]._source;
+    if (r && r.body && r.body.hits) {
+      if (r.body.hits.hits && r.body.hits.hits[0] && r.body.hits.hits[0]._source) {
+        return r.body.hits.hits[0]._source;
+      }
     }
     else if (r && r.body) {
       return r.body;
@@ -324,9 +361,58 @@ const correl8 = function(doctype, basename, clientOpts) {
     return r.body;
   };
 
+  this.initECS = (module, object, startTime, endTime=null, createTime=null, kind='event', dataset=null) => {
+    const st = dayjs(startTime)
+    let et, ct
+    if (endTime) et = dayjs(endTime)
+    if (createTime) ct = dayjs(createTime)
+    
+    const hour = st.format('H');
+    const minute = (5 * Math.floor(st.format('m') / 5 )) % 60;
+    let idTime = parseInt(hour) + parseInt(minute)/60;
+    
+    return {
+      "@timestamp": st.format(),
+      "ecs": {
+        "version": "1.6.0"
+      },
+      "date_details": {
+        "year": parseInt(st.format('YYYY')),
+        "month": {
+          "number": parseInt(st.format('M')),
+          "name": st.format('MMMM'),
+        },
+        "week_number": parseInt(st.format('W')),
+        "day_of_year": parseInt(st.dayOfYear()),
+        "day_of_month": parseInt(st.format('D')),
+        "day_of_week": {
+          "number": parseInt(st.format('d')),
+          "name": st.format('dddd'),
+        }
+      },
+      "time_slice": {
+        "id": Math.round((idTime + (idTime >= 4 ? -4 : 20)) * 12),
+        "name": [hour, minute.toString().padStart(2, '0')].join(':'),
+        "start_hour": hour
+      },
+      "event": {
+        "created": ct ? ct.format() : st.format(),
+        "dataset": dataset,
+        "duration": et ? et.diff(st) * 1E6 : null,
+        "ingested": new Date(),
+        "kind": kind,
+        "module": module,
+        "original": JSON.stringify(object),
+        "start": st.format(),
+        "end": et ? et.format() : null,
+      },
+    }
+  }
+
   return this;
 
 }
+
 
 const createMapping = (object) => {
   var properties = {};
@@ -352,7 +438,8 @@ const createMapping = (object) => {
 */
       if (object[prop] === 'text') {
         properties[prop].fielddata = 'true';
-        properties[prop].doc_values = false;
+        // properties[prop].doc_values = false;
+        delete(properties[prop].doc_values);
       }
       else if (object[prop] === 'string') {
         properties[prop].type = 'keyword';
