@@ -88,9 +88,8 @@ const correl8 = function(doctype, basename, clientOpts) {
     searchParams.size = 1;
     if (object) {
       const response = await client.search(searchParams);
-      const obj = self.trimResults(response);
-      if (obj) {
-        try {
+      if (response && response.hits && response.hits.total && response.hits.total.value) {
+	try {
           params.id = self.configId;
           params.body = {doc: object};
           await client.update(params);
@@ -119,7 +118,7 @@ const correl8 = function(doctype, basename, clientOpts) {
   };
 
   this.init = (object) => {
-    var properties;
+    let properties;
     if (object.mappings && object.mappings.properties) {
       // assume that passed object is a valid mapping specification
       properties = object.mappings.properties;
@@ -137,8 +136,6 @@ const correl8 = function(doctype, basename, clientOpts) {
     }).then(() => {
       return client.indices.putMapping({
         index: self._index,
-        // type: self._type,
-        // include_type_name: true,
         body: {properties: properties}
       }).then(() => {
         // console.log(self._index + " initialized");
@@ -148,7 +145,7 @@ const correl8 = function(doctype, basename, clientOpts) {
                      'Tried to index ' + JSON.stringify(properties, null, 1) + '\n' +
                      'Got error: ' + JSON.stringify(error, null, 1);
       console.error(errorMsg);
-      console.trace(new Error(error));
+      throw new Error(error);
     });;
   };
 
@@ -158,27 +155,23 @@ const correl8 = function(doctype, basename, clientOpts) {
 
   this.clear = () => {
     return client.indices.getMapping({index: self._index}).then((resp) => {
-      // console.log('Fetched index map');
-      // console.log(resp.body);
-      // console.log(self._index);
       return client.indices.delete({index: self._index}).then(() => {
-        // console.log('Deleted index');
-        return client.index({
+        return client.indices.create({
           index: self._index,
-          // type: self._type,
-          // include_type_name: true,
           body: {}
         }).then(() => {
-          var mappings = resp.body[self._index].mappings;
+          // console.log('Created ' + self._index);
+        }).catch((error) => {
+          console.error('Could not re-create ' + self._index);
+          throw new Error(error)
+        }).then(() => {
+          const mappings = resp[self._index].mappings;
           if (mappings && mappings.properties) {
             if (mappings.properties.fielddata) {
               delete(mappings.properties.fielddata);
             }
-            // console.log(mappings.properties);
             return client.indices.putMapping({
               index: self._index,
-              // type: self._type,
-              // include_type_name: true,
               body: {properties: mappings.properties}
             });
           }
@@ -187,15 +180,15 @@ const correl8 = function(doctype, basename, clientOpts) {
           }
         }).catch((error) => {
           console.error('Could not create mapping for ' + self._index);
-          console.trace(new Error(error));
+          throw new Error(error);
         });
       }).catch((error) => {
         console.error('Could not delete existing index ' + self._index);
-        console.trace(new Error(error));
+        throw new Error(error);
       });
     }).catch((error) => {
       console.error('Could not read mapping for existing index ' + self._index);
-      console.trace(new Error(error));
+      throw new Error(error);
     });
   };
 
@@ -204,7 +197,7 @@ const correl8 = function(doctype, basename, clientOpts) {
   };
 
   this.guessTime = (obj) => {
-    var ts;
+    let ts;
     if (!obj) {
       return;
     }
@@ -226,31 +219,28 @@ const correl8 = function(doctype, basename, clientOpts) {
   };
 
   this.insert = (object) => {
-    var ts = new Date();
-    var guessed;
+    let ts = new Date();
+    let guessed;
     if (object && (object["@timestamp"] || object.timestamp)) {
       let candidate = object["@timestamp"] || object.timestamp;
       if (guessed = self.guessTime(candidate)) {
         ts = guessed;
       }
       else {
-        var msg = 'Could not parse timestamp ' + candidate + '!' +
+        const msg = 'Could not parse timestamp ' + candidate + '!' +
           ' Setting @timestamp to ' + ts + '.';
         console.warn(msg);
       }
     }
     object["@timestamp"] = ts;
     return client.indices.exists({index: self._index}).then(() => {
-      // console.log('Index exists!');
-      var params = {
+      const params = {
         index: self._index,
-        // type: self._type,
         body: object
       };
       if (object.id) {
         params.id = object.id;
       }
-      // console.log('INSERTING: ' + JSON.stringify(params, null, 1));
       return client.index(params);
     }).catch((error) => {
       console.error('Initialize first! Unknown index ' + self._index);
@@ -260,7 +250,7 @@ const correl8 = function(doctype, basename, clientOpts) {
   };
 
   this.bulk = (bulk, timeout) => {
-    var params = {index: self._index, body: bulk};
+    const params = {index: self._index, body: bulk};
     if (timeout) {
       params.timeout = timeout;
       params.requestTimeout = 300000;
@@ -275,9 +265,9 @@ const correl8 = function(doctype, basename, clientOpts) {
   this.deleteMany = (params) => {
     return this.search(params).then((results) => {
       // console.log(results);
-      var bulk = [];
-      for (var i=0; i<results.lenght; i++) {
-        var id = results[i]._id;
+      const bulk = [];
+      for (let i=0; i<results.lenght; i++) {
+        const id = results[i]._id;
         bulk.push({delete: {index: this._index, id: id}});
       }
       // console.log(bulk);
@@ -291,7 +281,7 @@ const correl8 = function(doctype, basename, clientOpts) {
   this.deleteByQuery = async (q) => {
     const opts = {
       index: this._index,
-      q: q
+      body: {query: q}
     };
     try {
       return await client.deleteByQuery(opts);
@@ -329,8 +319,8 @@ const correl8 = function(doctype, basename, clientOpts) {
   };
 
   this.msearch = (params) => {
-    var searchParams = [];
-    for (var i=0; i<params.length; i++) {
+    const searchParams = [];
+    for (let i=0; i<params.length; i++) {
       searchParams[2*i] = {index: self._index};
       searchParams[2*i+1] = params[i];
     }
@@ -338,12 +328,14 @@ const correl8 = function(doctype, basename, clientOpts) {
   };
 
   this.release = () => {
-    // the process will hang for some time unless the Elasticsearch connection is closed
     return client.close();
   };
 
   this.trimResults = (r) => {
-    if (r && r.body && r.body.hits) {
+    if (r && r.hits && r.hits.hits && r.hits.hits[0]) {
+      return r.hits.hits[0]._source;
+    }
+    else if (r && r.body && r.body.hits) {
       if (r.body.hits.hits && r.body.hits.hits[0] && r.body.hits.hits[0]._source) {
         return r.body.hits.hits[0]._source;
       }
@@ -354,11 +346,11 @@ const correl8 = function(doctype, basename, clientOpts) {
     else if (r && r.meta && r.meta.body) {
       return r.meta.body;
     }
-    return false;
+    return r;
   };
 
   this.trimBulkResults = (r) => {
-    return r.body;
+    return r;
   };
 
   this.initECS = (module, object, startTime, endTime=null, createTime=null, kind='event', dataset=null) => {
@@ -415,8 +407,8 @@ const correl8 = function(doctype, basename, clientOpts) {
 
 
 const createMapping = (object) => {
-  var properties = {};
-  for (var prop in object) {
+  const properties = {};
+  for (const prop in object) {
     if (typeof(object[prop]) === 'object') {
       // recurse into sub objects
       properties[prop] = {type: 'object', properties: createMapping(object[prop])};
